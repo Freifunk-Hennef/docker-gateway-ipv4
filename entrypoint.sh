@@ -28,11 +28,16 @@ do
     GRE_TUNNEL="$(echo $GRE_TUNNELS | jq -c '.['$GRE_TUNNEL_I']')"
     splitGreTunnel $GRE_TUNNEL
     ip tunnel add $TUNNEL_NAME mode gre remote $TUNNEL_ENDPOINT ttl 64
-    ip link set $TUNNEL_NAME mtu $TUNNEL_MTU
+    ip link set $TUNNEL_NAME mtu $GRE_TUNNEL_MTU
     ip link set $TUNNEL_NAME up
     ip addr add $TUNNEL_ADDRESS_IPV4/255.255.255.255 peer $TUNNEL_PEER_IPV4 dev $TUNNEL_NAME
     iptables -t nat -A POSTROUTING -o $TUNNEL_NAME -s $MESH_IPV4_NET -j SNAT --to-source $BIRD_IPV4_PUBLIC_ADDRESS
-    iptables -A FORWARD -o $TUNNEL_NAME -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    if [ -z "$GRE_TUNNEL_MSS_CLAMP"]
+    then
+        iptables -A FORWARD -o $TUNNEL_NAME -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+    else
+        iptables -A FORWARD -o $TUNNEL_NAME -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss $GRE_TUNNEL_MSS_CLAMP
+    fi
     echo 2 > /proc/sys/net/ipv4/conf/$TUNNEL_NAME/rp_filter
 done
 
